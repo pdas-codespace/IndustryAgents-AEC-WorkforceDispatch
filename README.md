@@ -1,39 +1,56 @@
-# Foundry Hosted Agent with MCP Tools
+# AEC Industry Agent - Workforce Dispatch Assistant
 
-A hosted agent deployed on Azure AI Foundry that integrates with external MCP (Model Context Protocol) tools via Azure API Management for authentication and tracing.
+An Azure AI Foundry Prompt Agent that helps construction site managers with **workforce dispatch** and **skill finding** using Foundry IQ as a knowledge base. The agent retrieves workforce details, skills, certifications, and availability to assist in matching the right workers to job sites.
+
+## Use Case
+
+In the **Architecture, Engineering & Construction (AEC)** industry, dispatching the right workforce to construction sites is critical. This agent helps:
+
+- 🔍 **Find workers by skill** - Search for workers with specific certifications (e.g., crane operators, electricians)
+- 📋 **Check availability** - Query worker schedules and availability for dispatch
+- 🏗️ **Site assignment** - Get recommendations for workforce allocation based on project needs
+- 📊 **Compliance tracking** - Verify worker certifications and training status
 
 ## Architecture
 
-This agent uses the Microsoft Agent Framework with:
-- **MCPStreamableHTTPTool**: Executes MCP tool calls directly within the container (enables full tracing)
-- **HostedMCPTool**: Alternative that delegates tool execution to the Foundry platform
-- **Azure API Management**: Provides secure access to MCP servers with subscription key authentication
-- **OpenTelemetry + Application Insights**: Full observability including tool call tracing
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure AI Foundry                         │
+│  ┌─────────────────┐      ┌─────────────────────────────┐  │
+│  │  Prompt Agent   │──────│  Foundry IQ Knowledge Base  │  │
+│  │  (GPT-4o)       │ MCP  │  (Workforce Data Index)     │  │
+│  └─────────────────┘      └─────────────────────────────┘  │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐      ┌─────────────────────────────┐  │
+│  │  OpenAI API     │      │  Azure AI Search            │  │
+│  │  (Responses)    │      │  (Vector + Semantic Search) │  │
+│  └─────────────────┘      └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## Features
+## Components
 
-- 🔧 **MCP Tool Integration**: Connect to any MCP-compliant server
-- 🔐 **APIM Authentication**: Secure MCP access via subscription keys or Managed Identity
-- 📊 **Full Tracing**: OpenTelemetry integration with Azure Monitor/Application Insights
-- 🚀 **CI/CD Pipeline**: GitHub Actions workflow for automated deployment
-- 🐳 **Container-based**: Deployed via Azure Container Registry
+1. **Foundry IQ MCP Connection** - Connects the agent to Azure AI Search knowledge base via MCP protocol
+2. **Prompt Agent** - A Foundry-hosted agent with instructions to query the workforce knowledge base
+3. **Client Application** - Interactive Python client to chat with the agent
 
 ## Prerequisites
 
 - Python 3.10+
 - Azure CLI installed and authenticated
-- Access to Azure AI Foundry
-- Azure Container Registry for hosting the agent image
-- Azure API Management (if using APIM for MCP authentication)
+- Access to Azure AI Foundry with a project
+- Azure AI Search resource with Foundry IQ knowledge base configured
+- Workforce data indexed in the knowledge base
 
-## Setup
+## Quick Start
 
-### 1. Clone and Configure (DevContainer also supported for you to launch through GH Codespaces)
+### 1. Clone and Setup
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd Foundry-Hosted-Agent
+git clone https://github.com/pdas-codespace/IndustryAgents-AEC-WorkforceDispatch.git
+cd IndustryAgents-AEC-WorkforceDispatch
 
 # Create virtual environment
 python -m venv .venv
@@ -48,187 +65,125 @@ cp .env.example .env
 # Edit .env with your Azure resource details
 ```
 
-### 2. Azure Resources Required
+### 2. Configure Environment Variables
 
-- **Azure AI Foundry Account** with a project
-- **Azure OpenAI deployment** (e.g., gpt-4o)
-- **Azure Container Registry** for hosting the agent image
-- **Azure API Management** (optional) for MCP server authentication
-- **Application Insights** (optional) for tracing
+Edit `.env` with your Azure resource details:
 
-### 3. Required Permissions
+```env
+# Azure AI Foundry Project
+AZURE_AI_PROJECT_ENDPOINT=https://<your-foundry-account>.services.ai.azure.com/api/projects/<project>
+AZURE_AI_PROJECT_RESOURCE_ID=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>
 
-The Foundry Project Managed Identity needs:
-- `Cognitive Services OpenAI User` role on the Azure OpenAI resource
-- `Azure AI User` role on the Foundry project
+# Model Configuration
+AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-4o
 
-For APIM-backed MCP tools, configure one of:
-- **Subscription Key**: Pass via `Ocp-Apim-Subscription-Key` header
-- **Managed Identity**: Configure APIM policy to validate JWT from Foundry's managed identity
+# Foundry IQ Knowledge Base (Azure AI Search)
+FOUNDRY_KNOWLEDGE_BASE_MCP_URL=https://<ai-search>.search.windows.net/knowledgebases/<kb-id>/mcp?api-version=2025-11-01-preview
+MCP_TOOL_CONNECTION_NAME=<your-connection-name>
+AI_SEARCH_API_KEY=<your-ai-search-api-key>
 
-## CI/CD Pipeline
+# Agent Names
+PROMPT_AGENT_NAME=WorkforceDispatchAgent
+```
 
-This repository includes a GitHub Actions workflow that automatically builds and deploys the agent when changes are pushed to `main`.
+### 3. Create the Foundry IQ MCP Connection
 
-### Setup GitHub Secrets
-
-Add the following secrets to your repository (Settings → Secrets and variables → Actions):
-
-One sample gh command to help you achieve that - 
+This creates a connection between your Foundry project and the Azure AI Search knowledge base:
 
 ```bash
-
-# Set a simple text secret
-gh secret set AGENT_NAME --repo <user-name>/<repo-name> --body "testconcurrentflowasagent"
-
+python createFoundryIQMCPConnection.py
 ```
 
-| Secret Name | Description | Example Value |
-|-------------|-------------|---------------|
-| `AZURE_CREDENTIALS` | Service Principal credentials (JSON) | See below |
-| `AZURE_AI_PROJECT_ENDPOINT` | Foundry project endpoint | `https://<foundry-account>.services.ai.azure.com/api/projects/<project-name>` |
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint | `https://<foundry-account>.openai.azure.com/` |
-| `AZURE_AI_MODEL_DEPLOYMENT_NAME` | Model deployment name | `gpt-4o` |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` | Chat model deployment name | `gpt-4o` |
-| `ACR_NAME` | Azure Container Registry name | `myacr` (without .azurecr.io) |
-| `IMAGE_NAME` | Container image name | `foundry-workflow-agent` |
-| `FOUNDRY_ACCOUNT` | Foundry account name | `myfoundryaccount` |
-| `PROJECT_NAME` | Foundry project name | `myproject` |
-| `AGENT_NAME` | Name for the hosted agent | `MyHostedAgent` |
-| `REMOTE_MCP_URL` | MCP server URL (APIM endpoint) | `https://myapim.azure-api.net/mcp/mcp` |
-| `MCP_TOOL_CONNECTION_ID` | Foundry project connection for MCP | `WeatherMCPTool` |
-| `APIM_SUBSCRIPTION_KEY` | APIM subscription key | `abc123...` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | App Insights connection string | `InstrumentationKey=...` |
+### 4. Create the Prompt Agent
 
-**Create `AZURE_CREDENTIALS`:**
-```bash
-az ad sp create-for-rbac --name "github-foundry-agent-cicd" \
-  --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/<resource-group> \
-  --sdk-auth
-```
-Copy the entire JSON output as the secret value and use to set AZURE_CREDENTIALS
-
-### Required Role Assignments for CI/CD Service Principal
+This registers the Prompt Agent with Foundry IQ as its knowledge tool:
 
 ```bash
-# ACR Contributor access (for az acr build)
-az role assignment create --assignee <sp-app-id> --role "Contributor" \
-  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.ContainerRegistry/registries/<acr-name>
-
-# Cognitive Services access for agent management
-az role assignment create --assignee <sp-app-id> --role "Cognitive Services Contributor" \
-  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-account>
-
-# Azure AI User access at Foundry resource level (required for agent registration)
-az role assignment create --assignee <sp-app-id> --role "Azure AI User" \
-  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-account>
-
-# Azure AI User access at Foundry Project level
-az role assignment create --assignee <sp-app-id> --role "Azure AI User" \
-  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-account>/projects/<project-name>
+python createPromptAgentWithFoundryIQ.py
 ```
 
-### Workflow Triggers
+### 5. Chat with the Agent
 
-- **Automatic**: Pushes to `main` that modify `main.py`, `requirements.txt`, or `Dockerfile`
-- **Manual**: Use "Run workflow" in GitHub Actions to deploy with a custom version tag
-
-## Manual Deployment
-
-### Build and Push Container Image
+Start an interactive session to ask questions about your workforce:
 
 ```bash
-az acr build --image <agent-name>:<version> --registry <your-acr>.azurecr.io --file Dockerfile .
+python callPromptAgent.py
 ```
 
-### Register the Agent
+## Usage Examples
 
-```bash
-python registerAgent.py
+```
+You: Who are the certified crane operators available this week?
+
+Agent: Based on the knowledge base, I found the following certified crane operators 
+available this week:
+
+1. **John Smith** - NCCCO Certified, available Mon-Fri
+   - Certifications: Lattice Boom Crane, Tower Crane
+   - Current assignment: None
+   【1:0†workforce_data.pdf】
+
+2. **Maria Garcia** - NCCCO Certified, available Tue-Sat
+   - Certifications: Mobile Crane, Overhead Crane
+   - Current assignment: Downtown Project (ends Tuesday)
+   【1:1†workforce_data.pdf】
+...
 ```
 
-### Start the Agent
-
-```bash
-az cognitiveservices agent start \
-  --account-name <foundry-account> \
-  --project-name <project-name> \
-  --name <agent-name> \
-  --agent-version <version>
 ```
+You: Find electricians with high voltage certification for the new hospital project
 
-## Local Testing
-
-```bash
-python callHostedAgent.py
-```
-You can also test the deployed agent through Foundry Playground.
-
-## MCP Tool Types
-
-This project supports two approaches for MCP tool integration:
-
-### MCPStreamableHTTPTool (Recommended for Tracing)
-- Executes MCP calls **within the container**
-- HTTP requests are visible in Application Insights traces
-- Requires passing authentication headers manually (e.g., `Ocp-Apim-Subscription-Key`)
-
-```python
-MCPStreamableHTTPTool(
-    name="WeatherMCPAPIM",
-    url=os.environ["REMOTE_MCP_URL"],
-    headers={"Ocp-Apim-Subscription-Key": os.environ.get("APIM_SUBSCRIPTION_KEY", "")},
-    description="Weather tool...",
-    approval_mode="never_require"
-)
-```
-
-### HostedMCPTool (Platform-managed)
-- Delegates MCP calls to **Foundry platform**
-- Uses `project_connection_id` for authentication (configured in Foundry portal)
-- Tool calls are NOT visible in your Application Insights (platform-managed)
-
-```python
-HostedMCPTool(
-    name="WeatherMCPAPIM",
-    url=os.environ["REMOTE_MCP_URL"],
-    description="Weather tool...",
-    approval_mode="never_require"
-)
+Agent: I found 3 electricians with high voltage certification suitable for the 
+hospital project...
 ```
 
 ## Project Structure
 
 ```
-├── main.py                 # Hosted agent entry point with MCP tools
-├── registerAgent.py        # Agent registration script with tools config
-├── callHostedAgent.py      # Client script to invoke the hosted agent
-├── Dockerfile              # Container image definition
-├── requirements.txt        # Python dependencies
-├── agent.yaml              # Declarative agent manifest (optional)
-├── .env.example            # Environment variable template
-└── .github/workflows/
-    └── deploy-agent.yml    # CI/CD pipeline
+├── createFoundryIQMCPConnection.py  # Creates MCP connection to Foundry IQ
+├── createPromptAgentWithFoundryIQ.py # Registers Prompt Agent with KB tool
+├── callPromptAgent.py               # Interactive client to chat with agent
+├── requirements.txt                 # Python dependencies
+├── .env.example                     # Environment variable template
+├── .gitignore                       # Git ignore patterns
+└── README.md                        # This file
 ```
 
-## Security Notes
-
-- **Never commit `.env` files** - they contain secrets
-- Use **Managed Identity** when running in Azure (preferred)
-- Use **Service Principal** only for local development if needed
-- Rotate secrets regularly
-- Store production secrets in Azure Key Vault
-
-## Files
+## Files Description
 
 | File | Description |
 |------|-------------|
-| `main.py` | Agent implementation with concurrent workflow |
-| `registerAgent.py` | Script to register the agent in Foundry |
-| `callHostedAgent.py` | Client script to test the deployed agent |
-| `agent.yaml` | Agent configuration and metadata |
-| `Dockerfile` | Container image definition |
-| `requirements.txt` | Python dependencies |
+| `createFoundryIQMCPConnection.py` | Creates an MCP connection in Foundry project pointing to Azure AI Search knowledge base |
+| `createPromptAgentWithFoundryIQ.py` | Registers a Prompt Agent that uses Foundry IQ for retrieval-augmented generation |
+| `callPromptAgent.py` | Interactive client with streaming responses and OpenTelemetry tracing |
+| `.env.example` | Template for required environment variables |
+
+## Required Azure Permissions
+
+### On Azure AI Search
+The Foundry project managed identity needs:
+- `Search Index Data Reader` - To query the knowledge base
+- `Search Index Data Contributor` - For full knowledge base operations
+
+### On Azure AI Foundry
+Your user account needs:
+- `Azure AI User` or `Cognitive Services Contributor` - To create agents and connections
+
+## Tracing & Observability
+
+The client includes OpenTelemetry integration with Azure Monitor:
+- Agent calls are traced to Application Insights
+- View traces in Foundry portal → Observability → Tracing
+
+## Security Notes
+
+- **Never commit `.env` files** - they contain API keys
+- Use **Managed Identity** in production when possible
+- The `AI_SEARCH_API_KEY` is used for CustomKeys auth; consider Key Vault for production
+- Rotate API keys regularly
+
+## License
+
+MIT
 
 
