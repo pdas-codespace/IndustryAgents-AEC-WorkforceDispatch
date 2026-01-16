@@ -11,6 +11,30 @@ In the **Architecture, Engineering & Construction (AEC)** industry, dispatching 
 - 🏗️ **Site assignment** - Get recommendations for workforce allocation based on project needs
 - 📊 **Compliance tracking** - Verify worker certifications and training status
 
+## Solution Design
+
+![AI-Powered Workforce Dispatch System Architecture](design/AECWorkforceAgent-design-diagram.png)
+
+The full solution integrates multiple components:
+
+| Component | Description |
+|-----------|-------------|
+| **IoT Sensors** | Worksite devices sending real-time status to Microsoft Fabric |
+| **Microsoft Fabric** | Eventstream, Eventhouse, Real-Time Dashboard, and Activator for event processing |
+| **Worker Dispatch Agent** | Central Copilot orchestrator that coordinates workforce dispatch |
+| **Foundry Agent** | Queries Foundry IQ (Azure AI Search) for workforce skills and availability |
+| **Fabric Data Agent** | Fetches real-time device insights via MCP from Fabric Semantic Model |
+| **Weather MCP Server** | External weather data service accessed via Azure API Management |
+| **Communication Agent** | Drafts and sends notifications via Outlook to dispatched workers |
+
+**Flow:**
+1. IoT sensors stream device status → Fabric Eventstream → Eventhouse → Dashboard
+2. Critical events trigger Fabric Activator → Teams notification to Home Office
+3. Employee chats with Worker Dispatch Agent to find available workforce
+4. Agent orchestrates: workforce lookup + real-time device data + weather conditions
+5. Communication Agent drafts email → Worker Notification sent
+6. Worker dispatched to worksite
+
 ## Architecture
 
 ```
