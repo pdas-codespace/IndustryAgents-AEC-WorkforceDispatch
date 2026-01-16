@@ -31,17 +31,19 @@ In the **Architecture, Engineering & Construction (AEC)** industry, dispatching 
 
 ## Components
 
-1. **Foundry IQ MCP Connection** - Connects the agent to Azure AI Search knowledge base via MCP protocol
-2. **Prompt Agent** - A Foundry-hosted agent with instructions to query the workforce knowledge base
-3. **Client Application** - Interactive Python client to chat with the agent
+1. **Knowledge Base Creation** - Script to create Azure AI Search index with blob storage as document source
+2. **Foundry IQ MCP Connection** - Connects the agent to Azure AI Search knowledge base via MCP protocol
+3. **Prompt Agent** - A Foundry-hosted agent with instructions to query the workforce knowledge base
+4. **Client Application** - Interactive Python client to chat with the agent
 
 ## Prerequisites
 
 - Python 3.10+
 - Azure CLI installed and authenticated
 - Access to Azure AI Foundry with a project
-- Azure AI Search resource with Foundry IQ knowledge base configured
-- Workforce data indexed in the knowledge base
+- Azure AI Search resource (with agentic retrieval support)
+- Azure Blob Storage with workforce documents (PDF, DOCX, etc.)
+- Azure OpenAI with embedding model deployed (e.g., text-embedding-3-large)
 
 ## Quick Start
 
@@ -109,6 +111,51 @@ Start an interactive session to ask questions about your workforce:
 ```bash
 python callPromptAgent.py
 ```
+
+## Creating a Knowledge Base from Blob Storage (Optional)
+
+If you need to create a new knowledge base from scratch with your own documents:
+
+### 1. Configure Blob Storage
+
+Add these variables to your `.env`:
+
+```env
+# Azure AI Search
+AZURE_SEARCH_ENDPOINT=https://<your-search-service>.search.windows.net
+AZURE_SEARCH_INDEX_NAME=workforce-documents
+AZURE_SEARCH_KNOWLEDGE_BASE_NAME=workforce-knowledge-base
+
+# Azure Blob Storage (using Entra ID authentication)
+AZURE_BLOB_STORAGE_RESOURCE_ID=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<storage-account>
+AZURE_BLOB_CONTAINER_NAME=workforce-documents
+
+# Azure OpenAI Embedding Model
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-3-large
+```
+
+### 2. Assign Required Roles
+
+```bash
+# Get Search service managed identity
+SEARCH_MI=$(az search service show --name <search-service> --resource-group <rg> --query "identity.principalId" -o tsv)
+
+# Assign Storage Blob Data Reader to Search service
+az role assignment create --assignee $SEARCH_MI --role "Storage Blob Data Reader" \
+  --scope "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<storage-account>"
+```
+
+### 3. Upload Documents and Create Knowledge Base
+
+```bash
+# Upload workforce documents to blob container
+az storage blob upload-batch --destination workforce-documents --source ./documents --account-name <storage-account> --auth-mode login
+
+# Create the knowledge base (index, indexer, skillset, knowledge source)
+python createKnowledgeBaseFromBlobStorage.py
+```
+
+The script will output the MCP endpoint URL to use in `FOUNDRY_KNOWLEDGE_BASE_MCP_URL`.
 
 ## Usage Examples
 
