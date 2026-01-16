@@ -93,7 +93,7 @@ PROMPT_AGENT_NAME=WorkforceDispatchAgent
 This creates a connection between your Foundry project and the Azure AI Search knowledge base:
 
 ```bash
-python createFoundryIQMCPConnection.py
+python scripts/setup/createFoundryIQMCPConnection.py
 ```
 
 ### 4. Create the Prompt Agent
@@ -101,7 +101,7 @@ python createFoundryIQMCPConnection.py
 This registers the Prompt Agent with Foundry IQ as its knowledge tool:
 
 ```bash
-python createPromptAgentWithFoundryIQ.py
+python scripts/setup/createPromptAgentWithFoundryIQ.py
 ```
 
 ### 5. Chat with the Agent
@@ -109,7 +109,7 @@ python createPromptAgentWithFoundryIQ.py
 Start an interactive session to ask questions about your workforce:
 
 ```bash
-python callPromptAgent.py
+python scripts/clients/callPromptAgent.py
 ```
 
 ## Creating a Knowledge Base from Blob Storage (Optional)
@@ -152,7 +152,7 @@ az role assignment create --assignee $SEARCH_MI --role "Storage Blob Data Reader
 az storage blob upload-batch --destination workforce-documents --source ./documents --account-name <storage-account> --auth-mode login
 
 # Create the knowledge base (index, indexer, skillset, knowledge source)
-python createKnowledgeBaseFromBlobStorage.py
+python scripts/setup/createKnowledgeBaseFromBlobStorage.py
 ```
 
 The script will output the MCP endpoint URL to use in `FOUNDRY_KNOWLEDGE_BASE_MCP_URL`.
@@ -187,28 +187,55 @@ hospital project...
 ## Project Structure
 
 ```
-├── createKnowledgeBaseFromBlobStorage.py  # Creates KB from blob storage
-├── createFoundryIQMCPConnection.py        # Creates MCP connection to Foundry IQ
-├── createPromptAgentWithFoundryIQ.py      # Registers Prompt Agent with KB tool
-├── callPromptAgent.py                     # Interactive client to chat with agent
-├── callHostedAgent.py                     # Original hosted agent client
-├── requirements.txt                       # Python dependencies
-├── .env.example                           # Environment variable template
-├── azclicommands.example                  # Azure CLI commands reference
-├── .gitignore                             # Git ignore patterns
-└── README.md                              # This file
+├── scripts/
+│   ├── setup/                                  # Setup and creation scripts
+│   │   ├── createKnowledgeBaseFromBlobStorage.py
+│   │   ├── createFoundryIQMCPConnection.py
+│   │   ├── createPromptAgentWithFoundryIQ.py
+│   │   └── registerAgent.py
+│   └── clients/                                # Client scripts
+│       ├── callPromptAgent.py
+│       └── callHostedAgent.py
+├── docs/
+│   └── azclicommands.example                   # Azure CLI commands reference
+├── main.py                                     # Main entry point
+├── Dockerfile                                  # Container configuration
+├── requirements.txt                            # Python dependencies
+├── .env.example                                # Environment variable template
+├── .gitignore                                  # Git ignore patterns
+└── README.md                                   # This file
 ```
 
 ## Files Description
+
+### Setup Scripts (`scripts/setup/`)
 
 | File | Description |
 |------|-------------|
 | `createKnowledgeBaseFromBlobStorage.py` | Creates complete KB pipeline: index, data source, skillset, indexer, knowledge source, knowledge base from blob storage using Entra ID auth |
 | `createFoundryIQMCPConnection.py` | Creates an MCP connection in Foundry project pointing to Azure AI Search knowledge base |
 | `createPromptAgentWithFoundryIQ.py` | Registers a Prompt Agent that uses Foundry IQ for retrieval-augmented generation |
+| `registerAgent.py` | Registers agents with Azure AI Foundry |
+
+### Client Scripts (`scripts/clients/`)
+
+| File | Description |
+|------|-------------|
 | `callPromptAgent.py` | Interactive client with streaming responses and OpenTelemetry tracing |
 | `callHostedAgent.py` | Alternative client for hosted agent interactions |
+
+### Documentation (`docs/`)
+
+| File | Description |
+|------|-------------|
 | `azclicommands.example` | Reference template for all Azure CLI commands needed for setup |
+
+### Root Files
+
+| File | Description |
+|------|-------------|
+| `main.py` | Main application entry point |
+| `Dockerfile` | Container configuration for deployment |
 | `.env.example` | Template for required environment variables |
 
 ## Required Azure Permissions
@@ -234,7 +261,7 @@ The client includes OpenTelemetry integration with Azure Monitor:
 - **Use Entra ID authentication** for blob storage instead of connection strings
 - Use **Managed Identity** in production when possible
 - The `AI_SEARCH_API_KEY` is used for CustomKeys auth; consider Key Vault for production
-- See `azclicommands.example` for all required role assignments
+- See `docs/azclicommands.example` for all required role assignments
 - Rotate API keys regularly
 
 ## License
