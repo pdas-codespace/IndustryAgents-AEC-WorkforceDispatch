@@ -1,0 +1,183 @@
+# =============================================================================
+# Azure CLI Commands Reference for AEC Workforce Dispatch Agent
+# =============================================================================
+# Replace the variables below with your actual values before running
+
+# =============================================================================
+# VARIABLES - Set these first
+# =============================================================================
+FOUNDRY_ACCOUNT_NAME=<your-foundry-account>
+PROJECT_NAME=<your-project-name>
+AGENT_NAME=<your-agent-name>
+AGENT_VERSION=<version>
+SUBSCRIPTION_ID=<your-subscription-id>
+RESOURCE_GROUP=<your-resource-group>
+ACR_NAME=<your-acr-name>
+STORAGE_ACCOUNT_NAME=<your-storage-account>
+SEARCH_SERVICE_NAME=<your-search-service>
+BLOB_CONTAINER_NAME=workforce-documents
+
+# =============================================================================
+# 1. INITIAL SETUP - Enable Managed Identity & Capability Host
+# =============================================================================
+
+# Enable system-assigned managed identity on the search service
+az search service update --name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --identity-type SystemAssigned
+
+# Get the search service managed identity principal ID
+az search service show --name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query "identity.principalId" -o tsv
+
+# Get the Foundry account managed identity principal ID
+az cognitiveservices account identity show --name $FOUNDRY_ACCOUNT_NAME --resource-group $RESOURCE_GROUP --query "principalId" -o tsv
+
+# Get access token for REST API calls
+TOKEN=$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)
+
+# Enable capability host for agents (one-time setup)
+curl --request PUT \
+  --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/$FOUNDRY_ACCOUNT_NAME/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" \
+  --header 'content-type: application/json' \
+  --header "authorization: Bearer $TOKEN" \
+  --data '{
+  "properties": {
+    "capabilityHostKind": "Agents",
+    "enablePublicHostingEnvironment": true
+  }
+}'
+
+# =============================================================================
+# 2. ROLE ASSIGNMENTS - Storage Account (for Knowledge Base indexing)
+# =============================================================================
+
+# Get search service managed identity
+SEARCH_MI=$(az search service show --name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query "identity.principalId" -o tsv)
+
+# Assign Storage Blob Data Reader to Search service (for indexer to read blobs)
+az role assignment create \
+  --assignee $SEARCH_MI \
+  --role "Storage Blob Data Reader" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME"
+
+# =============================================================================
+# 3. ROLE ASSIGNMENTS - Azure AI Search (for Knowledge Base MCP access)
+# =============================================================================
+
+# Get Foundry project managed identity
+FOUNDRY_MI=$(az cognitiveservices account identity show --name $FOUNDRY_ACCOUNT_NAME --resource-group $RESOURCE_GROUP --query "principalId" -o tsv)
+
+# Assign Search Index Data Reader to Foundry (minimum for KB queries)
+az role assignment create \
+  --assignee $FOUNDRY_MI \
+  --role "Search Index Data Reader" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Search/searchServices/$SEARCH_SERVICE_NAME"
+
+# Assign Search Index Data Contributor to Foundry (for full KB operations)
+az role assignment create \
+  --assignee $FOUNDRY_MI \
+  --role "Search Index Data Contributor" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Search/searchServices/$SEARCH_SERVICE_NAME"
+
+# Assign Search Service Contributor (if needed for advanced operations)
+az role assignment create \
+  --assignee $FOUNDRY_MI \
+  --role "Search Service Contributor" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Search/searchServices/$SEARCH_SERVICE_NAME"
+
+# =============================================================================
+# 4. ROLE ASSIGNMENTS - Azure OpenAI (for embedding model access)
+# =============================================================================
+
+# Assign Cognitive Services OpenAI User to Search service (for embeddings in indexer)
+az role assignment create \
+  --assignee $SEARCH_MI \
+  --role "Cognitive Services OpenAI User" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/$FOUNDRY_ACCOUNT_NAME"
+
+# =============================================================================
+# 5. STORAGE ACCOUNT - Create container for documents
+# =============================================================================
+
+# Create blob container for workforce documents
+az storage container create \
+  --name $BLOB_CONTAINER_NAME \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --auth-mode login
+
+# Upload documents to blob container
+az storage blob upload-batch \
+  --destination $BLOB_CONTAINER_NAME \
+  --source ./documents \
+  --account-name $STORAGE_ACCOUNT_NAME \
+  --auth-mode login
+
+# =============================================================================
+# 6. SEARCH SERVICE - Run indexer
+# =============================================================================
+
+# Run the indexer to process documents
+az search indexer run --name workforce-documents-indexer --service-name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP
+
+# Check indexer status
+az search indexer status --name workforce-documents-indexer --service-name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP
+
+# =============================================================================
+# 7. AGENT MANAGEMENT
+# =============================================================================
+
+# Start an agent
+az cognitiveservices agent start \
+  --account-name $FOUNDRY_ACCOUNT_NAME \
+  --project-name $PROJECT_NAME \
+  --name $AGENT_NAME \
+  --agent-version $AGENT_VERSION
+
+# Show agent details
+az cognitiveservices agent show \
+  --account-name $FOUNDRY_ACCOUNT_NAME \
+  --project-name $PROJECT_NAME \
+  --name $AGENT_NAME
+
+# List all agents in project
+az cognitiveservices agent list \
+  --account-name $FOUNDRY_ACCOUNT_NAME \
+  --project-name $PROJECT_NAME
+
+# Stop an agent
+az cognitiveservices agent stop \
+  --account-name $FOUNDRY_ACCOUNT_NAME \
+  --project-name $PROJECT_NAME \
+  --name $AGENT_NAME \
+  --agent-version $AGENT_VERSION
+
+# =============================================================================
+# 8. CONTAINER REGISTRY - Build and push images
+# =============================================================================
+
+# Build and push container image to ACR
+az acr build \
+  --image $AGENT_NAME:$AGENT_VERSION \
+  --registry $ACR_NAME.azurecr.io \
+  --file Dockerfile .
+
+# List images in ACR
+az acr repository list --name $ACR_NAME -o table
+
+# Show image tags
+az acr repository show-tags --name $ACR_NAME --repository $AGENT_NAME -o table
+
+# =============================================================================
+# 9. UTILITY COMMANDS
+# =============================================================================
+
+# Look up a service principal or user by object ID
+az ad sp show --id <object-id> --query "{displayName:displayName, appId:appId}" -o json
+
+# List role assignments for a principal
+az role assignment list --assignee <principal-id> --all -o table
+
+# Get AI Search API key (if needed for CustomKeys auth)
+az search admin-key show --service-name $SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query "primaryKey" -o tsv
+
+# Check current Azure CLI login
+az account show --query "{name:name, subscriptionId:id, tenantId:tenantId}" -o table
+

@@ -62,4 +62,4 @@ main.py
 callHostedAgent.py
 Dockerfile
 azclicommands
-azclicommands.example
+createFoundryIQMCPConnection_entraID.py
