@@ -187,22 +187,28 @@ hospital project...
 ## Project Structure
 
 ```
-├── createFoundryIQMCPConnection.py  # Creates MCP connection to Foundry IQ
-├── createPromptAgentWithFoundryIQ.py # Registers Prompt Agent with KB tool
-├── callPromptAgent.py               # Interactive client to chat with agent
-├── requirements.txt                 # Python dependencies
-├── .env.example                     # Environment variable template
-├── .gitignore                       # Git ignore patterns
-└── README.md                        # This file
+├── createKnowledgeBaseFromBlobStorage.py  # Creates KB from blob storage
+├── createFoundryIQMCPConnection.py        # Creates MCP connection to Foundry IQ
+├── createPromptAgentWithFoundryIQ.py      # Registers Prompt Agent with KB tool
+├── callPromptAgent.py                     # Interactive client to chat with agent
+├── callHostedAgent.py                     # Original hosted agent client
+├── requirements.txt                       # Python dependencies
+├── .env.example                           # Environment variable template
+├── azclicommands.example                  # Azure CLI commands reference
+├── .gitignore                             # Git ignore patterns
+└── README.md                              # This file
 ```
 
 ## Files Description
 
 | File | Description |
 |------|-------------|
+| `createKnowledgeBaseFromBlobStorage.py` | Creates complete KB pipeline: index, data source, skillset, indexer, knowledge source, knowledge base from blob storage using Entra ID auth |
 | `createFoundryIQMCPConnection.py` | Creates an MCP connection in Foundry project pointing to Azure AI Search knowledge base |
 | `createPromptAgentWithFoundryIQ.py` | Registers a Prompt Agent that uses Foundry IQ for retrieval-augmented generation |
 | `callPromptAgent.py` | Interactive client with streaming responses and OpenTelemetry tracing |
+| `callHostedAgent.py` | Alternative client for hosted agent interactions |
+| `azclicommands.example` | Reference template for all Azure CLI commands needed for setup |
 | `.env.example` | Template for required environment variables |
 
 ## Required Azure Permissions
@@ -225,8 +231,10 @@ The client includes OpenTelemetry integration with Azure Monitor:
 ## Security Notes
 
 - **Never commit `.env` files** - they contain API keys
+- **Use Entra ID authentication** for blob storage instead of connection strings
 - Use **Managed Identity** in production when possible
 - The `AI_SEARCH_API_KEY` is used for CustomKeys auth; consider Key Vault for production
+- See `azclicommands.example` for all required role assignments
 - Rotate API keys regularly
 
 ## License
