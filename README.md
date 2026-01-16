@@ -35,24 +35,6 @@ The full solution integrates multiple components:
 5. Communication Agent drafts email → Worker Notification sent
 6. Worker dispatched to worksite
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Azure AI Foundry                         │
-│  ┌─────────────────┐      ┌─────────────────────────────┐  │
-│  │  Prompt Agent   │──────│  Foundry IQ Knowledge Base  │  │
-│  │  (GPT-4o)       │ MCP  │  (Workforce Data Index)     │  │
-│  └─────────────────┘      └─────────────────────────────┘  │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐      ┌─────────────────────────────┐  │
-│  │  OpenAI API     │      │  Azure AI Search            │  │
-│  │  (Responses)    │      │  (Vector + Semantic Search) │  │
-│  └─────────────────┘      └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
-
 ## Components
 
 1. **Knowledge Base Creation** - Script to create Azure AI Search index with blob storage as document source
