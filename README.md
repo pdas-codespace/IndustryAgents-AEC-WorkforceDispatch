@@ -23,7 +23,7 @@ The full solution integrates multiple components:
 | **Microsoft Fabric** | Eventstream, Eventhouse, Real-Time Dashboard, and Activator for event processing |
 | **Worker Dispatch Agent** | Central Copilot orchestrator that coordinates workforce dispatch |
 | **Foundry Agent** | Queries Foundry IQ (Azure AI Search) for workforce skills and availability |
-| **Fabric Data Agent** | Fetches real-time device insights via MCP from Fabric Semantic Model |
+| **Fabric Data Agent** | Fetches real-time device insights via Microsoft Fabric Data Agent for NL2SQL queries |
 | **Weather MCP Server** | External weather data service accessed via Azure API Management |
 | **Communication Agent** | Drafts and sends notifications via Outlook to dispatched workers |
 
@@ -50,6 +50,7 @@ The full solution integrates multiple components:
 - Azure AI Search resource (with agentic retrieval support)
 - Azure Blob Storage with workforce documents (PDF, DOCX, etc.)
 - Azure OpenAI with embedding model deployed (e.g., text-embedding-3-large)
+- Microsoft Fabric workspace with a published Fabric Data Agent (for real-time data queries)
 
 ## Quick Start
 
@@ -92,6 +93,10 @@ AI_SEARCH_API_KEY=<your-ai-search-api-key>
 
 # Agent Names
 PROMPT_AGENT_NAME=WorkforceDispatchAgent
+
+# Microsoft Fabric Data Agent (Optional - for real-time data queries)
+FABRIC_PROJECT_CONNECTION_NAME=<your-fabric-connection-name>
+FABRIC_AGENT_NAME=FabricDataAgent
 ```
 
 ### 3. Create the Foundry IQ MCP Connection
@@ -116,6 +121,157 @@ Start an interactive session to ask questions about your workforce:
 
 ```bash
 python scripts/clients/callPromptAgent.py
+```
+
+## Microsoft Fabric Data Agent Integration (Optional)
+
+The Fabric Data Agent enables natural language queries over enterprise data stored in Microsoft Fabric. This is useful for real-time device data, IoT sensor readings, and structured business data.
+
+### Prerequisites for Fabric Integration
+
+1. **Create a Fabric Data Agent** in Microsoft Fabric ([documentation](https://go.microsoft.com/fwlink/?linkid=2312910))
+2. **Publish the Fabric Data Agent** to make it available
+3. **Create a connection** in your Foundry project to the Fabric Data Agent
+4. **Assign permissions**:
+   - Developers and end users need `Azure AI User` RBAC role
+   - Users need at least `READ` access to the Fabric Data Agent and its underlying data sources
+5. Ensure the Fabric Data Agent and Foundry project are in the **same tenant**
+
+### Configure Environment Variables for Fabric
+
+Add these to your `.env`:
+
+```env
+# Microsoft Fabric Data Agent
+FABRIC_PROJECT_CONNECTION_NAME=<your-fabric-connection-name>
+FABRIC_AGENT_NAME=FabricDataAgent
+```
+
+### Create the Fabric Agent
+
+```bash
+python scripts/setup/createPromptAgentWithFabric.py
+```
+
+### Chat with the Fabric Agent
+
+```bash
+python scripts/clients/callFabricAgent.py
+```
+
+### Fabric Agent Usage Examples
+
+```
+You: Are there any active critical device alerts across any of our work sites?
+
+Agent: Based on the real-time data from Fabric, here are the active critical alerts:
+- Site NYC-01: Crane sensor offline (Critical)
+- Site CHI-03: Temperature threshold exceeded on excavator
+- Site LA-02: Equipment maintenance overdue
+...
+```
+
+```
+You: Any alerts in the PA site?
+
+Agent: According to the device data for Pennsylvania sites:
+- PA-Site-01: 2 active alerts (1 warning, 1 informational)
+- PA-Site-02: No active alerts
+- PA-Site-03: 1 critical alert - Safety harness sensor disconnected
+...
+```
+
+```
+You: What kind of alerts are visible when it comes to worker safety?
+
+Agent: Here are the worker safety-related alerts across all sites:
+- Hard hat compliance violations: 3 incidents today
+- Restricted zone breaches: 2 active warnings
+- Safety equipment sensor failures: 5 devices need attention
+- Heat stress warnings: 4 workers flagged in high-temp zones
+...
+```
+
+## Weather Agent Integration (Optional)
+
+The Weather Agent uses an MCP-based weather tool to provide weather-aware safety instructions for construction workers. It can help generate dispatch notes with appropriate safety gear recommendations based on current and forecasted weather conditions.
+
+For the full implementation of a Foundry Hosted Agent with MCP Tools (including the Weather Tool), see: [Foundry-Hosted-Agent-With-MCP-Tools](https://github.com/pdas-codespace/Foundry-Hosted-Agent-With-MCP-Tools)
+
+### Weather Agent Usage Examples
+
+```
+You: There is a Crane failure in our PA site. Please help me write a dispatch note for John Doe.
+
+Agent: **DISPATCH NOTE**
+
+**To:** John Doe  
+**Site:** PA-Site-01  
+**Issue:** Crane Failure - Immediate Response Required
+
+**Current Weather Conditions (PA Site):**
+- Temperature: 45°F (7°C)
+- Conditions: Overcast with light rain expected
+- Wind: 12 mph gusting to 18 mph
+
+**Required Safety Gear:**
+- High-visibility rain jacket
+- Insulated work gloves
+- Non-slip safety boots
+- Hard hat with rain cover
+- Safety harness for elevated work
+
+**Weather Alert:** Light rain forecasted for the next 4 hours. 
+Exercise caution on wet surfaces during crane inspection.
+
+**Assignment:** Assess crane malfunction and report findings.
+**Priority:** High
+...
+```
+
+```
+You: What safety gear should workers wear at the Chicago site today?
+
+Agent: Based on current weather conditions at the Chicago site:
+
+**Current Conditions:**
+- Temperature: 28°F (-2°C)
+- Wind Chill: 18°F (-8°C)
+- Conditions: Clear but cold
+
+**Recommended Safety Gear:**
+- Insulated hard hat liner
+- Thermal base layers
+- Insulated safety gloves (rated for cold weather)
+- Insulated steel-toe boots
+- High-visibility insulated jacket
+- Face protection/balaclava for wind exposure
+
+**Weather Alert:** Temperatures expected to drop below 20°F tonight.
+Implement cold stress prevention protocols for extended outdoor work.
+...
+```
+
+```
+You: Are there any upcoming weather alerts that could affect our work sites?
+
+Agent: Here are the weather alerts affecting your work sites:
+
+**⚠️ Wind Advisory - Northeast Region (NYC, NJ sites)**
+- Effective: Today 2:00 PM - Tomorrow 6:00 AM
+- Winds: 25-35 mph with gusts up to 50 mph
+- Impact: Suspend crane operations, secure loose materials
+
+**🌧️ Flash Flood Watch - Southeast Region (GA, FL sites)**
+- Effective: Tomorrow 8:00 AM - 8:00 PM
+- Expected rainfall: 2-4 inches
+- Impact: Monitor excavation sites, ensure proper drainage
+
+**Recommended Actions:**
+- Review site-specific safety protocols
+- Pre-position emergency equipment
+- Brief all workers on weather-related hazards
+...
 ```
 
 ## Creating a Knowledge Base from Blob Storage (Optional)
@@ -198,12 +354,18 @@ hospital project...
 │   │   ├── createKnowledgeBaseFromBlobStorage.py
 │   │   ├── createFoundryIQMCPConnection.py
 │   │   ├── createPromptAgentWithFoundryIQ.py
+│   │   ├── createPromptAgentWithFabric.py
 │   │   └── registerAgent.py
 │   └── clients/                                # Client scripts
 │       ├── callPromptAgent.py
+│       ├── callFabricAgent.py
 │       └── callHostedAgent.py
+├── orchestration/                              # Agent orchestration configurations
+│   ├── foundry-workflows/                      # Microsoft Foundry Workflow YAML definitions
+│   └── copilot-studio/                         # Copilot Studio orchestration examples
 ├── docs/
 │   └── azclicommands.example                   # Azure CLI commands reference
+├── design/                                     # Solution design diagrams
 ├── main.py                                     # Main entry point
 ├── Dockerfile                                  # Container configuration
 ├── requirements.txt                            # Python dependencies
@@ -221,6 +383,7 @@ hospital project...
 | `createKnowledgeBaseFromBlobStorage.py` | Creates complete KB pipeline: index, data source, skillset, indexer, knowledge source, knowledge base from blob storage using Entra ID auth |
 | `createFoundryIQMCPConnection.py` | Creates an MCP connection in Foundry project pointing to Azure AI Search knowledge base |
 | `createPromptAgentWithFoundryIQ.py` | Registers a Prompt Agent that uses Foundry IQ for retrieval-augmented generation |
+| `createPromptAgentWithFabric.py` | Creates a Prompt Agent with Microsoft Fabric Data Agent for NL2SQL queries over enterprise data |
 | `registerAgent.py` | Registers agents with Azure AI Foundry |
 
 ### Client Scripts (`scripts/clients/`)
@@ -228,7 +391,15 @@ hospital project...
 | File | Description |
 |------|-------------|
 | `callPromptAgent.py` | Interactive client with streaming responses and OpenTelemetry tracing |
+| `callFabricAgent.py` | Interactive client for Fabric Data Agent with tool_choice enforcement and tracing |
 | `callHostedAgent.py` | Alternative client for hosted agent interactions |
+
+### Orchestration (`orchestration/`)
+
+| Folder | Description |
+|--------|-------------|
+| `foundry-workflows/` | Microsoft Foundry Workflow YAML definitions for multi-agent orchestration |
+| `copilot-studio/` | Copilot Studio orchestration examples and configuration guides |
 
 ### Documentation (`docs/`)
 
@@ -254,6 +425,12 @@ The Foundry project managed identity needs:
 ### On Azure AI Foundry
 Your user account needs:
 - `Azure AI User` or `Cognitive Services Contributor` - To create agents and connections
+
+### On Microsoft Fabric (for Fabric Data Agent)
+Your user account needs:
+- At least `READ` access to the Fabric Data Agent
+- `READ` access to the underlying data sources the Fabric Data Agent connects to
+- Fabric Data Agent and Foundry project must be in the same tenant
 
 ## Tracing & Observability
 

@@ -1,0 +1,86 @@
+kind: workflow
+trigger:
+  kind: OnConversationStart
+  id: trigger_id
+  actions:
+    - kind: SetVariable
+      id: set_user_message
+      variable: Local.UserMessage
+      value: =System.LastMessage
+    - kind: InvokeAzureAgent
+      id: action-1767656053792
+      agent:
+        name: DetectUserIntentAgent
+      input:
+        messages: =System.LastMessage
+      output:
+        autoSend: false
+        messages: Local.NextAgentToBeInvoked
+        responseObject: Local.IntentResult
+    - kind: ParseValue
+      variable: Local.ParsedIntent
+      valueType:
+        kind: Record
+      value: =Local.IntentResult
+      id: action-1767673285496
+    - kind: ConditionGroup
+      id: check_completion
+      conditions:
+        - id: check_confirm
+          condition: =Local.ParsedIntent.nextAgent = "WorkforceAgent"
+          actions:
+            - kind: InvokeAzureAgent
+              id: action-1767656495723
+              agent:
+                name: WorkforceAgentWithVectorStore
+              input:
+                messages: =Local.UserMessage
+              output:
+                autoSend: false
+                messages: Local.Var7974
+            - kind: SendActivity
+              activity: "{First(Local.Var7974).Text}"
+              id: action-1767731302403
+        - condition: =Local.ParsedIntent.nextAgent = "ConstructionSiteAgent"
+          actions:
+            - kind: InvokeAzureAgent
+              id: action-1767722870076
+              agent:
+                name: AECDataAgent
+              input:
+                messages: =Local.UserMessage
+              output:
+                autoSend: false
+                messages: Local.ConstructionSiteAgentResponse
+            - kind: ParseValue
+              id: parse_construction_response
+              variable: Local.ExtractedText
+              valueType:
+                kind: String
+              value: =First(Local.ConstructionSiteAgentResponse).Text
+            - kind: SendActivity
+              id: sendActivity_construction
+              activity: "{Local.ExtractedText}"
+          id: if-check_completion-y87euua1
+        - condition: =Local.ParsedIntent.nextAgent = "WeatherAgent"
+          actions:
+            - kind: InvokeAzureAgent
+              id: action-1767756774444
+              agent:
+                name: WeatherHostedAgentWithMCP
+              input:
+                messages: =System.LastMessage
+              output:
+                autoSend: true
+                messages: Local.weatherInfo
+            - kind: SendActivity
+              activity: "{First(Local.weatherInfo).Text}"
+              id: action-1767756820079
+          id: if-check_completion-c6erf76r
+      elseActions:
+        - kind: SendActivity
+          id: sendActivity_confirmed
+          activity: "{Local.Var5620.NextAgentToBeInvoked}"
+id: ""
+name: HITL-With-Intent-Detection
+description: ""
