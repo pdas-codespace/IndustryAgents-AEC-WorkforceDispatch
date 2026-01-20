@@ -63,3 +63,8 @@ callHostedAgent.py
 Dockerfile
 azclicommands
 createFoundryIQMCPConnection_entraID.py
+
+# Large video files (exceed GitHub's 100MB limit)
+*.mp4
+docs/*.mp4
+
